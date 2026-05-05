@@ -1,0 +1,60 @@
+# Dependencies
+vendor/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime/cache files
+writable/cache/*
+writable/debugbar/*
+writable/logs/*
+writable/session/*
+writable/uploads/*
+!writable/cache/.gitkeep
+!writable/debugbar/.gitkeep
+!writable/logs/.gitkeep
+!writable/session/.gitkeep
+!writable/uploads/.gitkeep
+writable/telegram_admin_offset.txt
+
+# Customer payment uploads are runtime data, not program assets
+public/uploads/bukti_bayar/*
+!public/uploads/bukti_bayar/.gitkeep
+
+# Keep local environment file intentionally for localhost handover
+!.env
+
+# Generated reports, thesis docs, diagrams, screenshots, and audit outputs
+*.docx
+*.pdf
+capture_*.html
+capture_*.py
+generate_*.py
+regenerate_*.py
+export_*.py
+audit/
+contoh/
+diagram/
+docs/
+output_diagram/
+output_docx/
+plans/
+screenshots/
+tests/
+CLAUDE.md
+catatanrevisi.txt
+implementation_plan.md
+
+# Archives/backups
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

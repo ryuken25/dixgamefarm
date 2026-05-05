@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Login Helper</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            color: #222;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .box {
+            max-width: 720px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+            padding: 24px;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 24px;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #111827;
+            color: #e5e7eb;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 13px;
+            min-height: 120px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="box">
+        <h1>Auto Login Screenshot Helper</h1>
+        <p>Halaman ini dipakai untuk menyiapkan sesi login sebelum pengambilan screenshot otomatis.</p>
+        <pre id="log">Memulai helper...</pre>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const role = params.get('role') || 'customer';
+        const target = params.get('target') || '/';
+        const prepare = params.get('prepare') || '';
+        const productId = params.get('product_id') || '1';
+        const qty = params.get('qty') || '1';
+
+        const TOKEN_NAME = 'csrf_token_name';
+        const TOKEN_COOKIE = 'csrf_cookie_name';
+
+        const credentialsMap = {
+            customer: {
+                email: 'putu.ayu@gmail.com',
+                password: 'password123'
+            },
+            admin: {
+                email: 'admin@dixgamefarm.com',
+                password: 'admin123'
+            }
+        };
+
+        const logBox = document.getElementById('log');
+
+        function log(message) {
+            logBox.textContent += '\n' + message;
+        }
+
+        function getCookie(name) {
+            const prefix = name + '=';
+            const parts = document.cookie.split(';');
+            for (const rawPart of parts) {
+                const part = rawPart.trim();
+                if (part.startsWith(prefix)) {
+                    return decodeURIComponent(part.substring(prefix.length));
+                }
+            }
+            return '';
+        }
+
+        function extractCsrf(html) {
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const input = doc.querySelector('input[type="hidden"][name]');
+            if (!input) {
+                throw new Error('Token CSRF tidak ditemukan pada halaman login');
+            }
+            return {
+                name: input.getAttribute('name') || TOKEN_NAME,
+                value: input.getAttribute('value') || ''
+            };
+        }
+
+        async function fetchLoginToken() {
+            const response = await fetch('/auth/login', {
+                credentials: 'include',
+                cache: 'no-store'
+            });
+
+            const html = await response.text();
+            return extractCsrf(html);
+        }
+
+        async function login() {
+            const creds = credentialsMap[role];
+            if (!creds) {
+                throw new Error('Role helper tidak valid: ' + role);
+            }
+
+            const csrf = await fetchLoginToken();
+            log('Token login didapat. Mengirim autentikasi untuk role: ' + role);
+
+            const form = new URLSearchParams();
+            form.append('email', creds.email);
+            form.append('password', creds.password);
+            form.append(csrf.name, csrf.value);
+
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                credentials: 'include',
+                redirect: 'follow',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': getCookie(TOKEN_COOKIE) || csrf.value,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: form.toString()
+            });
+
+            log('Login response status: ' + response.status);
+            if (!response.ok) {
+                throw new Error('Login gagal dengan status ' + response.status);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 700));
+        }
+
+        async function addToCart() {
+            const token = getCookie(TOKEN_COOKIE);
+            log('Menambahkan produk ke keranjang. Produk ID: ' + productId + ', qty: ' + qty);
+
+            const form = new URLSearchParams();
+            form.append('produk_id', String(productId));
+            form.append('jumlah', String(qty));
+            form.append(TOKEN_NAME, token);
+
+            const response = await fetch('/customer/cart/add', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': getCookie(TOKEN_COOKIE) || token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                body: form.toString()
+            });
+
+            let payload = {};
+            try {
+                payload = await response.json();
+            } catch (error) {
+                payload = { message: 'Respon bukan JSON' };
+            }
+
+            log('Add to cart status: ' + response.status + ' | ' + (payload.message || 'tanpa pesan'));
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        async function start() {
+            try {
+                log('Role: ' + role);
+                log('Target: ' + target);
+                if (prepare) {
+                    log('Prepare mode: ' + prepare);
+                }
+
+                await login();
+
+                if (prepare === 'cart' || prepare === 'checkout') {
+                    await addToCart();
+                }
+
+                log('Mengalihkan ke target...');
+                window.location.href = target;
+            } catch (error) {
+                log('ERROR: ' + error.message);
+                document.body.style.background = '#fee2e2';
+            }
+        }
+
+        start();
+    </script>
+</body>
+
+</html>
