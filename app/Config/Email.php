@@ -50,6 +50,29 @@ class Email extends BaseConfig
      */
     public int $SMTPPort = 25;
 
+    public function __construct()
+    {
+        parent::__construct();
+
+        // Override email/SMTP settings from .env when available so the
+        // credentials are not hard-coded in source (use getenv() which works
+        // with CI4 DotEnv, same pattern as Config\Database).
+        if (file_exists(ROOTPATH . '.env')) {
+            $this->protocol       = getenv('email.protocol') ?: $this->protocol;
+            $this->SMTPHost       = getenv('email.SMTPHost') ?: $this->SMTPHost;
+            $this->SMTPUser       = getenv('email.SMTPUser') ?: $this->SMTPUser;
+            $this->SMTPPass       = getenv('email.SMTPPass') ?: $this->SMTPPass;
+            $this->SMTPCrypto     = getenv('email.SMTPCrypto') ?: $this->SMTPCrypto;
+            $this->mailType       = getenv('email.mailType') ?: $this->mailType;
+            $this->fromEmail      = getenv('email.fromEmail') ?: $this->fromEmail;
+            $this->fromName       = getenv('email.fromName') ?: $this->fromName;
+
+            if (($port = getenv('email.SMTPPort')) !== false && $port !== '') {
+                $this->SMTPPort = (int) $port;
+            }
+        }
+    }
+
     /**
      * SMTP Timeout (in seconds)
      */
