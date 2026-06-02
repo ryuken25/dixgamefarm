@@ -329,6 +329,17 @@ class PembayaranModel extends Model
 
             $db->transCommit();
 
+            // Send invoice email to customer when payment is approved
+            // (outside transaction - fire and forget, must not break the flow)
+            if ($isValid) {
+                try {
+                    $emailService = new \App\Libraries\EmailService();
+                    $emailService->sendInvoicePaid((int) $payment['pesanan_id']);
+                } catch (\Throwable $e) {
+                    log_message('error', 'Invoice email notification failed: ' . $e->getMessage());
+                }
+            }
+
             return [
                 'success' => true,
                 'message' => $isValid ? 'Pembayaran berhasil diverifikasi' : 'Pembayaran ditolak'
