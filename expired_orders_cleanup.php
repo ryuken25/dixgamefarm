@@ -83,6 +83,16 @@ try {
             $db->transCommit();
             echo "  Order {$order['nomor_invoice']} cancelled successfully\n";
 
+            // Fire-and-forget email ke pelanggan (di luar transaksi).
+            try {
+                (new \App\Libraries\EmailService())->sendOrderCancelled(
+                    (int) $order['id'],
+                    'Pembayaran melewati batas waktu 24 jam'
+                );
+            } catch (Throwable $e) {
+                echo "  Email notification failed (non-fatal): " . $e->getMessage() . "\n";
+            }
+
         } catch (Exception $e) {
             $db->transRollback();
             echo "  Error processing order {$order['nomor_invoice']}: " . $e->getMessage() . "\n";

@@ -11,6 +11,13 @@ class DatabaseSeeder extends Seeder
         $now = date('Y-m-d H:i:s');
 
         // ============================================================
+        // 0. RESET — bikin seeder idempotent.
+        // Dipanggil ulang kali kedua tidak melempar "Duplicate entry".
+        // FK_CHECKS=0 sementara karena truncate antar tabel relasi.
+        // ============================================================
+        $this->resetTables();
+
+        // ============================================================
         // 1. USERS (1 Admin + 5 Customers)
         // ============================================================
         $users = [
@@ -663,5 +670,34 @@ class DatabaseSeeder extends Seeder
         echo "  - 5 pembayaran\n";
         echo "  - 15 notifikasi\n";
         echo "\n";
+    }
+
+    /**
+     * Reset semua tabel yang akan diisi seeder. Aman dipanggil ulang
+     * walau ada FK antar tabel — FK_CHECKS dimatikan selama truncate.
+     * Skip kalau tabel belum ada (mis. baru `migrate:rollback`).
+     */
+    private function resetTables(): void
+    {
+        $tables = [
+            'notifikasi',
+            'pembayaran',
+            'detail_pesanan',
+            'pesanan',
+            'item_keranjang',
+            'keranjang',
+            'produk',
+            'kategori',
+            'users',
+            'telegram_action_tokens',
+        ];
+
+        $this->db->query('SET FOREIGN_KEY_CHECKS = 0');
+        foreach ($tables as $table) {
+            if ($this->db->tableExists($table)) {
+                $this->db->query('TRUNCATE TABLE `' . $table . '`');
+            }
+        }
+        $this->db->query('SET FOREIGN_KEY_CHECKS = 1');
     }
 }

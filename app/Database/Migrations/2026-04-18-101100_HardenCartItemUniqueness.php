@@ -42,8 +42,13 @@ class HardenCartItemUniqueness extends Migration
 
     public function down()
     {
+        // Pastikan FK keranjang_id tetap punya cover index sebelum drop UNIQUE.
         $indexes = array_column($this->db->query('SHOW INDEX FROM item_keranjang')->getResultArray(), 'Key_name');
+
         if (in_array('uniq_item_keranjang_cart_product', $indexes, true)) {
+            if (!in_array('idx_item_keranjang_cart', $indexes, true)) {
+                $this->db->query('ALTER TABLE item_keranjang ADD INDEX idx_item_keranjang_cart (`keranjang_id`)');
+            }
             $this->db->query('ALTER TABLE item_keranjang DROP INDEX uniq_item_keranjang_cart_product');
         }
     }

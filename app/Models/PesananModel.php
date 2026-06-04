@@ -218,6 +218,13 @@ class PesananModel extends Model
                 // Do not fail the order just because Telegram failed
             }
 
+            // Send order-created email to customer (fire-and-forget, outside transaction)
+            try {
+                (new \App\Libraries\EmailService())->sendOrderCreated((int) $orderId);
+            } catch (\Throwable $e) {
+                log_message('error', 'Order-created email failed: ' . $e->getMessage());
+            }
+
             return [
                 'success' => true,
                 'message' => 'Pesanan berhasil dibuat',
@@ -341,6 +348,13 @@ class PesananModel extends Model
             );
 
             $db->transCommit();
+
+            // Email pelanggan (fire-and-forget, di luar transaksi)
+            try {
+                (new \App\Libraries\EmailService())->sendOrderCancelled((int) $orderId, $reason);
+            } catch (\Throwable $e) {
+                log_message('error', 'Order-cancelled email failed: ' . $e->getMessage());
+            }
 
             return true;
 
@@ -484,6 +498,14 @@ class PesananModel extends Model
                 );
 
                 $db->transCommit();
+
+                // Email pelanggan (fire-and-forget, di luar transaksi)
+                try {
+                    (new \App\Libraries\EmailService())->sendOrderCancelled((int) $orderId, 'Dibatalkan oleh admin');
+                } catch (\Throwable $e) {
+                    log_message('error', 'Order-cancelled email failed: ' . $e->getMessage());
+                }
+
                 return true;
 
             } catch (\Exception $e) {
@@ -493,7 +515,18 @@ class PesananModel extends Model
             }
         }
 
-        return $this->update($orderId, array_merge(['status_pesanan' => $newStatus], $persistExtraData));
+        $updated = $this->update($orderId, array_merge(['status_pesanan' => $newStatus], $persistExtraData));
+
+        // Email pelanggan untuk transisi DIKIRIM / PESANAN_SIAP (fire-and-forget).
+        if ($updated && in_array($newStatus, ['DIKIRIM', 'PESANAN_SIAP'], true)) {
+            try {
+                (new \App\Libraries\EmailService())->sendOrderShipped((int) $orderId);
+            } catch (\Throwable $e) {
+                log_message('error', 'Order-shipped email failed: ' . $e->getMessage());
+            }
+        }
+
+        return $updated;
     }
 
     /**

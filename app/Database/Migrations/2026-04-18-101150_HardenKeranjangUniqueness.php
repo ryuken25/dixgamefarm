@@ -50,8 +50,16 @@ class HardenKeranjangUniqueness extends Migration
 
     public function down()
     {
+        // MySQL menolak drop index 'uniq_keranjang_user' selama masih ada FK
+        // di kolom user_id (FK butuh index). Strategi: tambahkan dulu index
+        // non-unique sebagai pengganti, baru drop yang unique. FK tetap aman
+        // karena selalu ada index yang menutupi kolomnya.
         $indexes = array_column($this->db->query('SHOW INDEX FROM keranjang')->getResultArray(), 'Key_name');
+
         if (in_array('uniq_keranjang_user', $indexes, true)) {
+            if (!in_array('idx_keranjang_user', $indexes, true)) {
+                $this->db->query('ALTER TABLE keranjang ADD INDEX idx_keranjang_user (`user_id`)');
+            }
             $this->db->query('ALTER TABLE keranjang DROP INDEX uniq_keranjang_user');
         }
     }
