@@ -448,6 +448,14 @@ class PesananModel extends Model
                 $this->update($orderId, array_merge(['status_pesanan' => $newStatus], $persistExtraData));
 
                 $db->transCommit();
+
+                // Email pelanggan: pesanan selesai (fire-and-forget)
+                try {
+                    (new \App\Libraries\EmailService())->sendOrderCompleted((int) $orderId);
+                } catch (\Throwable $e) {
+                    log_message('error', 'Order-completed email failed: ' . $e->getMessage());
+                }
+
                 return true;
 
             } catch (\Exception $e) {
