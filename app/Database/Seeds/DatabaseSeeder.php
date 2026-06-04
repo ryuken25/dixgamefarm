@@ -186,6 +186,8 @@ class DatabaseSeeder extends Seeder
                 'deskripsi' => 'DOC ayam joper paket 1 sarang isi 8 ekor lengkap vaksin. Pertumbuhan cepat, tahan penyakit, cocok untuk ternak.',
                 'foto' => null,
                 'is_active' => true,
+                'is_preorder' => true,
+                'estimasi_pre_order' => '14-21 hari setelah pembayaran',
                 'created_at' => '2026-01-20 09:15:00',
                 'updated_at' => '2026-03-26 09:00:00',
             ],
