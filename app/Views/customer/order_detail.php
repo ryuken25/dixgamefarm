@@ -369,12 +369,50 @@
                         </div>
                     <?php endif; ?>
 
+                    <?php if (!empty($isLateShipment)): ?>
+                        <div class="alert alert-warning small mt-3 mb-0" data-testid="late-shipment-alert">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            Pesanan kamu belum dikirim lebih dari 24 jam.
+                            Klik tombol di bawah untuk hubungi admin via WhatsApp.
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($waHelp)): ?>
+                        <div class="card border-success-subtle mt-3" data-testid="wa-help-card">
+                            <div class="card-body py-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="bi bi-question-circle text-success me-2"></i>
+                                    <strong class="small">Butuh bantuan?</strong>
+                                </div>
+                                <div>
+                                    <?php foreach ($waHelp as $btn): ?>
+                                        <a href="<?= esc($btn['url']) ?>"
+                                           target="_blank" rel="noopener"
+                                           class="btn btn-sm btn-outline-success me-2 mb-2"
+                                           data-testid="wa-help-btn">
+                                            <i class="bi bi-whatsapp"></i>
+                                            <?= esc($btn['label']) ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+
                     <?php if ($orderData['order']['status_pesanan'] === 'SELESAI'): ?>
                         <div class="alert alert-success small mb-0">
                             <i class="bi bi-check-circle me-1"></i>
                             Pesanan telah selesai. Terima kasih telah berbelanja di DIX Game Farm!
                         </div>
                     <?php endif; ?>
+
+                    <!-- Bantuan WhatsApp: kalau ada kendala pembayaran/pengiriman -->
+                    <div class="d-grid mt-3">
+                        <a href="https://wa.me/6285847937050?text=Halo%20admin%20DixGameFarm%2C%20saya%20butuh%20bantuan%20untuk%20pesanan%20<?= esc(rawurlencode($orderData['order']['nomor_invoice'])) ?>."
+                            target="_blank" rel="noopener" class="btn btn-outline-success btn-sm">
+                            <i class="bi bi-whatsapp"></i> Butuh Bantuan? Chat Admin
+                        </a>
+                    </div>
 
                     <div class="text-center mt-3">
                         <a href="<?= base_url('customer/dashboard') ?>" class="section-link-muted text-decoration-none">

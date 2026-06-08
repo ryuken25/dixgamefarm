@@ -22,6 +22,12 @@ writable/telegram_admin_offset.txt
 public/uploads/bukti_bayar/*
 !public/uploads/bukti_bayar/.gitkeep
 
+# Playwright artifacts (screenshots, reports, traces) — generated each run
+artifacts/playwright/
+playwright-report/
+test-results/
+writable/playwright_orders.json
+
 # Keep local environment file intentionally for localhost handover
 !.env
 
@@ -41,7 +47,6 @@ output_diagram/
 output_docx/
 plans/
 screenshots/
-tests/
 CLAUDE.md
 catatanrevisi.txt
 implementation_plan.md

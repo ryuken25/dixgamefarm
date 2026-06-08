@@ -27,8 +27,18 @@ class PesananModel extends Model
         'email_penerima',
         'no_hp_penerima',
         'alamat_pengiriman',
-        'catatan_pelanggan'
+        'catatan_pelanggan',
+        'diproses_at',
+        'dikirim_at',
+        'reminder_terlambat_at',
     ];
+
+    /**
+     * Threshold SLA pengiriman kurir (jam). Order kurir berstatus DIPROSES
+     * lebih lama dari ini dianggap "terlambat" — memunculkan tombol bantuan
+     * WA di order detail customer dan dipicu reminder Telegram ke admin.
+     */
+    public const SHIPMENT_SLA_HOURS = 24;
 
     // Dates
     protected $useTimestamps = true;
@@ -403,10 +413,17 @@ class PesananModel extends Model
                     return false;
                 }
 
-                $updated = $this->update($orderId, array_merge([
+                // Set diproses_at HANYA bila belum ada nilainya (idempotent re-entry).
+                $current = $this->find($orderId);
+                $updateData = [
                     'status_pesanan' => 'DIPROSES',
-                    'expired_at' => null,
-                ], $persistExtraData));
+                    'expired_at'     => null,
+                ];
+                if (empty($current['diproses_at'])) {
+                    $updateData['diproses_at'] = date('Y-m-d H:i:s');
+                }
+
+                $updated = $this->update($orderId, array_merge($updateData, $persistExtraData));
 
                 if (!$updated) {
                     $db->transRollback();
@@ -523,7 +540,17 @@ class PesananModel extends Model
             }
         }
 
-        $updated = $this->update($orderId, array_merge(['status_pesanan' => $newStatus], $persistExtraData));
+        $extraUpdate = ['status_pesanan' => $newStatus];
+
+        // Stamp dikirim_at saat order pertama kali pindah ke DIKIRIM.
+        if ($newStatus === 'DIKIRIM') {
+            $current = $this->find($orderId);
+            if (empty($current['dikirim_at'])) {
+                $extraUpdate['dikirim_at'] = date('Y-m-d H:i:s');
+            }
+        }
+
+        $updated = $this->update($orderId, array_merge($extraUpdate, $persistExtraData));
 
         // Email pelanggan untuk transisi DIKIRIM / PESANAN_SIAP (fire-and-forget).
         if ($updated && in_array($newStatus, ['DIKIRIM', 'PESANAN_SIAP'], true)) {
@@ -552,5 +579,65 @@ class PesananModel extends Model
         return $builder->orderBy('pesanan.tanggal_pesanan', 'DESC')
             ->limit($limit)
             ->findAll();
+    }
+
+    /**
+     * Ambil pesanan kurir yang sudah > SLA_HOURS di status DIPROSES tapi
+     * belum dikirim, dan belum di-reminder ke admin via Telegram.
+     * Dipakai oleh command `orders:remind-unshipped` — idempotent via kolom
+     * reminder_terlambat_at (di-stamp setelah Telegram terkirim).
+     */
+    public function getOrdersNeedingShipmentReminder(): array
+    {
+        $threshold = date('Y-m-d H:i:s', strtotime('-' . self::SHIPMENT_SLA_HOURS . ' hours'));
+
+        return $this->db->table('pesanan')
+            ->select('pesanan.id, pesanan.nomor_invoice, pesanan.grand_total, '
+                . 'pesanan.tipe_pengiriman, pesanan.status_pesanan, '
+                . 'pesanan.diproses_at, pesanan.user_id, '
+                . 'COALESCE(pesanan.nama_penerima, users.nama_lengkap) AS nama_lengkap, '
+                . 'COALESCE(pesanan.no_hp_penerima, users.no_hp) AS no_hp', false)
+            ->join('users', 'users.id = pesanan.user_id', 'left')
+            ->where('pesanan.status_pesanan', 'DIPROSES')
+            ->where('pesanan.tipe_pengiriman', 'DIKIRIM_KURIR')
+            ->where('pesanan.diproses_at IS NOT NULL', null, false)
+            ->where('pesanan.diproses_at <=', $threshold)
+            ->where('pesanan.reminder_terlambat_at IS NULL', null, false)
+            ->orderBy('pesanan.diproses_at', 'ASC')
+            ->get()
+            ->getResultArray();
+    }
+
+    /**
+     * Cek apakah pesanan kurir terlambat dikirim (> SLA_HOURS sejak DIPROSES).
+     * Dipakai view order_detail untuk munculin tombol bantuan WA & alert.
+     * Tidak depend pada DB — pure logic atas array order.
+     */
+    public function isShipmentLate(array $order): bool
+    {
+        if (($order['status_pesanan'] ?? null) !== 'DIPROSES') {
+            return false;
+        }
+        if (($order['tipe_pengiriman'] ?? null) !== 'DIKIRIM_KURIR') {
+            return false;
+        }
+        $diprosesAt = $order['diproses_at'] ?? null;
+        if (empty($diprosesAt)) {
+            return false;
+        }
+        $thresholdTs = strtotime('-' . self::SHIPMENT_SLA_HOURS . ' hours');
+        $diprosesTs  = strtotime($diprosesAt);
+        return $diprosesTs !== false && $diprosesTs <= $thresholdTs;
+    }
+
+    /**
+     * Tandai reminder Telegram untuk pesanan terlambat sudah dikirim.
+     * Dipanggil dari command orders:remind-unshipped — anti-spam.
+     */
+    public function markShipmentReminderSent(int $orderId): bool
+    {
+        return (bool) $this->update($orderId, [
+            'reminder_terlambat_at' => date('Y-m-d H:i:s'),
+        ]);
     }
 }

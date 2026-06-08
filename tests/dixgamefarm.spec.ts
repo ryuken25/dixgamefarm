@@ -187,6 +187,42 @@ test.describe('Feature A: Note tipe pengiriman (checkout)', () => {
 
         expect(consoleErrors, 'no console errors').toEqual([]);
     });
+
+    test('kurir-help-note: muncul HANYA saat DIKIRIM_KURIR + tombol WA', async ({ page }) => {
+        const consoleErrors: string[] = [];
+        attachErrorTrap(page, consoleErrors);
+
+        await page.goto('/capture/customer/checkout', { waitUntil: 'domcontentloaded' });
+
+        const select = page.locator('#tipe_pengiriman');
+        const helpNote = page.locator('#kurir-help-note');
+
+        // Default: hidden (style.display = 'none')
+        await expect(helpNote).toBeHidden();
+
+        // Pilih DIKIRIM_KURIR -> tampil
+        await select.selectOption('DIKIRIM_KURIR');
+        await expect(helpNote).toBeVisible();
+
+        // Tombol WA punya href wa.me/6285847937050 + open di tab baru
+        const waBtn = helpNote.locator('a.btn-success');
+        await expect(waBtn).toBeVisible();
+        const href = await waBtn.getAttribute('href');
+        expect(href, 'href kurir help WA').toContain('wa.me/6285847937050');
+        expect(href, 'pesan pengiriman terencode').toMatch(/pengiriman/i);
+        expect(await waBtn.getAttribute('target'), 'target=_blank').toBe('_blank');
+        expect(await waBtn.getAttribute('rel'), 'rel=noopener').toContain('noopener');
+
+        // Balik ke AMBIL_SENDIRI -> hidden
+        await select.selectOption('AMBIL_SENDIRI');
+        await expect(helpNote).toBeHidden();
+
+        // Balik ke kosong -> hidden
+        await select.selectOption('');
+        await expect(helpNote).toBeHidden();
+
+        expect(consoleErrors, 'no console errors').toEqual([]);
+    });
 });
 
 // ----------------------------------------------------------------
@@ -279,6 +315,23 @@ test.describe('Feature B: tombol bantuan WhatsApp', () => {
                 page.locator('[data-testid=wa-help-card]'),
                 `Order ${key}: WA card SEHARUSNYA tidak muncul`,
             ).toHaveCount(0);
+        }
+    });
+
+    test('Generic "Butuh Bantuan? Chat Admin" button: tampil di SEMUA status', async ({ page }) => {
+        const orders = loadOrderMap();
+        for (const key of ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const) {
+            await page.goto(`/capture/customer/order/${orders[key]}`, { waitUntil: 'domcontentloaded' });
+
+            const genericBtn = page.locator('a.btn-outline-success', { hasText: 'Butuh Bantuan' });
+            await expect(genericBtn, `Order ${key}: generic WA button harus tampil`).toBeVisible();
+
+            const href = await genericBtn.getAttribute('href');
+            expect(href, `Order ${key}: href wa.me/6285847937050`).toContain('wa.me/6285847937050');
+            // Pesan harus mengandung nomor invoice ter-encode (PWT- jadi PWT- atau PWT%2D)
+            expect(href, `Order ${key}: invoice ter-encode di ?text=`).toMatch(/PWT[-%]/i);
+            expect(await genericBtn.getAttribute('target'), 'target=_blank').toBe('_blank');
+            expect(await genericBtn.getAttribute('rel'), 'rel=noopener').toContain('noopener');
         }
     });
 });

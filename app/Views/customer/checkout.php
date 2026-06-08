@@ -103,6 +103,19 @@
                                     <option value="AMBIL_SENDIRI">Ambil Sendiri di Farm</option>
                                     <option value="DIKIRIM_KURIR">Dikirim via Kurir</option>
                                 </select>
+                                <div id="pengiriman-note" class="form-text mt-2 d-none"></div>
+                                <!-- Note bantuan: muncul cuma kalau pilih "Dikirim via Kurir" -->
+                                <div id="kurir-help-note" class="alert alert-warning mt-2 mb-0 py-2 px-3 small" style="display: none;">
+                                    <div class="d-flex align-items-start gap-2">
+                                        <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
+                                        <span>Pengiriman via kurir ditangani pihak ketiga. Kalau ada kendala saat
+                                            pengiriman, langsung hubungi admin lewat WhatsApp.</span>
+                                    </div>
+                                    <a href="https://wa.me/6285847937050?text=Halo%20admin%20DixGameFarm%2C%20saya%20mau%20tanya%20soal%20pengiriman%20pesanan%20saya."
+                                        target="_blank" rel="noopener" class="btn btn-success btn-sm mt-2">
+                                        <i class="bi bi-whatsapp"></i> Bantuan via WhatsApp
+                                    </a>
+                                </div>
                             </div>
                         </div>
 
@@ -269,6 +282,30 @@
 <?= $this->section('scripts') ?>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // ---------- Note tipe pengiriman (informatif, tidak ganggu submit) ----------
+        const tipeSelect = document.getElementById('tipe_pengiriman');
+        const pengirimanNote = document.getElementById('pengiriman-note');
+        const NOTE_TEXTS = {
+            'AMBIL_SENDIRI': '\u{1F3EA} Ambil sendiri di farm. Pesanan disiapkan dulu; kamu dapat notifikasi saat berstatus "Pesanan Siap". Tanpa ongkir.',
+            'DIKIRIM_KURIR': '\u{1F69A} Dikirim via kurir. Estimasi 2–3 hari kerja setelah pembayaran diverifikasi admin. Ongkir menyesuaikan kesepakatan. Kamu akan dapat kode resi saat barang dikirim.'
+        };
+        const updatePengirimanNote = () => {
+            if (!tipeSelect || !pengirimanNote) return;
+            const v = tipeSelect.value;
+            if (v && NOTE_TEXTS[v]) {
+                pengirimanNote.textContent = NOTE_TEXTS[v];
+                pengirimanNote.classList.remove('d-none');
+            } else {
+                pengirimanNote.textContent = '';
+                pengirimanNote.classList.add('d-none');
+            }
+        };
+        if (tipeSelect) {
+            tipeSelect.addEventListener('change', updatePengirimanNote);
+            // tampilkan note kalau pre-selected (mis. user balik dari error)
+            updatePengirimanNote();
+        }
+
         const form = document.getElementById('checkout-form');
         const submitButton = document.getElementById('process-checkout');
         const paymentOptionsContainer = document.getElementById('bank-options');
@@ -276,6 +313,16 @@
         const checkoutTokenInput = form.querySelector('input[name="checkout_token"]');
         let isSubmitting = false;
         let redirectScheduled = false;
+
+        // Toggle note bantuan kurir berdasarkan tipe pengiriman
+        const tipePengiriman = document.getElementById('tipe_pengiriman');
+        const kurirHelpNote = document.getElementById('kurir-help-note');
+        const toggleKurirHelpNote = () => {
+            if (!tipePengiriman || !kurirHelpNote) return;
+            kurirHelpNote.style.display = tipePengiriman.value === 'DIKIRIM_KURIR' ? 'block' : 'none';
+        };
+        tipePengiriman?.addEventListener('change', toggleKurirHelpNote);
+        toggleKurirHelpNote(); // jaga-jaga kalau value udah keisi pas reload
 
         const validationGroups = [
             {

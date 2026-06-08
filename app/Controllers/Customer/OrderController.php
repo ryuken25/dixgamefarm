@@ -53,12 +53,89 @@ class OrderController extends BaseController
             return redirect()->to(base_url('customer/dashboard'))->with('error', 'Pesanan tidak ditemukan');
         }
 
+        // ---------- Tombol bantuan WhatsApp ke admin ----------
+        $waNumber = preg_replace('/\D/', '', getenv('WHATSAPP_ADMIN_NUMBER') ?: '6285847937050');
+        $isLateShipment = $this->pesananModel->isShipmentLate($orderData['order']);
+
         $data = [
             'title' => 'Detail Pesanan - DIX Game Farm',
-            'orderData' => $orderData
+            'orderData' => $orderData,
+            'waNumber' => $waNumber,
+            'isLateShipment' => $isLateShipment,
+            'waHelp' => $this->buildWhatsappHelpButtons($orderData, $waNumber, $isLateShipment),
         ];
 
         return view('customer/order_detail', $data);
+    }
+
+    /**
+     * Bangun daftar tombol "Bantuan" yang link ke wa.me?text=... dengan
+     * template keluhan terisi otomatis sesuai status pesanan.
+     *
+     * @return list<array{label:string, url:string, icon?:string}>
+     */
+    private function buildWhatsappHelpButtons(array $orderData, string $waNumber, bool $isLateShipment): array
+    {
+        $order   = $orderData['order'];
+        $details = $orderData['details'] ?? [];
+        $status  = (string) ($order['status_pesanan'] ?? '');
+
+        $presets = [];
+        if ($status === 'DIPROSES' && ($order['tipe_pengiriman'] ?? '') === 'DIKIRIM_KURIR' && $isLateShipment) {
+            $presets[] = ['label' => 'Pesanan belum dikirim (>24 jam)', 'keluhan' => 'Pesanan saya belum dikirim padahal sudah lebih dari 24 jam sejak diverifikasi. Mohon dicek statusnya.'];
+        } elseif ($status === 'DIKIRIM') {
+            $presets[] = ['label' => 'Barang belum sampai', 'keluhan' => 'Barang belum sampai, mohon dicek status pengirimannya.'];
+            $presets[] = ['label' => 'Tanya estimasi pengiriman', 'keluhan' => 'Mau tanya estimasi pengiriman pesanan saya.'];
+        } elseif ($status === 'PESANAN_SIAP') {
+            $presets[] = ['label' => 'Tanya jadwal pengambilan', 'keluhan' => 'Mau tanya jadwal pengambilan pesanan saya di farm.'];
+        }
+
+        if ($presets === []) {
+            return [];
+        }
+
+        // Ringkasan item untuk template: "2x Lovebird, 1x Murai"
+        $ringkasanItem = '-';
+        if (!empty($details)) {
+            $parts = [];
+            foreach ($details as $d) {
+                $nama = $d['nama_ayam'] ?? 'Produk';
+                $qty  = (int) ($d['jumlah'] ?? 0);
+                $parts[] = $qty . 'x ' . $nama;
+            }
+            $ringkasanItem = implode(', ', $parts);
+        }
+
+        $labelStatusMap = [
+            'MENUNGGU_BAYAR' => 'Menunggu Pembayaran',
+            'DIPROSES'       => 'Diproses',
+            'PESANAN_SIAP'   => 'Pesanan Siap Diambil',
+            'DIKIRIM'        => 'Dikirim',
+            'SELESAI'        => 'Selesai',
+            'BATAL'          => 'Dibatalkan',
+        ];
+        $labelStatus = $labelStatusMap[$status] ?? $status;
+        $nama        = $order['nama_lengkap'] ?? ($order['nama_penerima'] ?? 'Pelanggan');
+        $invoice     = $order['nomor_invoice'] ?? '-';
+        $totalFmt    = 'Rp ' . number_format((float) ($order['grand_total'] ?? 0), 0, ',', '.');
+
+        $buttons = [];
+        foreach ($presets as $preset) {
+            $pesan = "Halo Admin DIX Game Farm \u{1F44B}\n"
+                . "Saya {$nama} mau menanyakan pesanan saya.\n\n"
+                . "No. Invoice: {$invoice}\n"
+                . "Status: {$labelStatus}\n"
+                . "Total: {$totalFmt}\n"
+                . "Pesanan: {$ringkasanItem}\n\n"
+                . "Keluhan: {$preset['keluhan']}\n\n"
+                . "Mohon info & bantuannya ya, terima kasih \u{1F64F}";
+
+            $buttons[] = [
+                'label' => $preset['label'],
+                'url'   => 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($pesan),
+            ];
+        }
+        return $buttons;
     }
 
     /**

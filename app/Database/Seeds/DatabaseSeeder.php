@@ -262,6 +262,13 @@ class DatabaseSeeder extends Seeder
             ],
         ];
 
+        // Normalisasi semua row punya set kolom yang sama (insertBatch error kalau
+        // sebagian row punya kolom tambahan seperti is_preorder / estimasi_pre_order).
+        $produkDefaults = [
+            'is_preorder'        => false,
+            'estimasi_pre_order' => null,
+        ];
+        $products = array_map(static fn (array $p) => array_merge($produkDefaults, $p), $products);
         $this->db->table('produk')->insertBatch($products);
 
         // ============================================================
