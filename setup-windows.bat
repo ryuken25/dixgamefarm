@@ -192,9 +192,10 @@ echo.
 REM ============================================================
 REM Step 5: Parse DB password dari .env, lalu CREATE DATABASE
 REM ============================================================
-echo [5/7] Pastikan database 'dixgamefarm_db' ada...
-
+REM Nama DB & password diambil dari .env (bukan hardcode) supaya CREATE DATABASE
+REM konsisten dengan target 'php spark migrate' yang juga baca .env.
 set "DB_PASS="
+set "DB_NAME="
 for /f "usebackq tokens=1,* delims==" %%a in ("%~dp0.env") do (
     set "_KEY=%%a"
     set "_VAL=%%b"
@@ -203,23 +204,29 @@ for /f "usebackq tokens=1,* delims==" %%a in ("%~dp0.env") do (
         rem comment, skip
     ) else if /i "!_KEY!"=="database.default.password" (
         set "DB_PASS=!_VAL!"
-    ) else if /i "!_KEY!"=="database.default.password " (
-        set "DB_PASS=!_VAL!"
+    ) else if /i "!_KEY!"=="database.default.database" (
+        set "DB_NAME=!_VAL!"
     )
 )
 if defined DB_PASS (
     for /f "tokens=* delims= " %%v in ("!DB_PASS!") do set "DB_PASS=%%v"
 )
+if defined DB_NAME (
+    for /f "tokens=* delims= " %%v in ("!DB_NAME!") do set "DB_NAME=%%v"
+)
+if not defined DB_NAME set "DB_NAME=dixgamefarm_db"
+
+echo [5/7] Pastikan database '!DB_NAME!' ada...
 
 if defined MYSQL_BIN (
     if "%MODE_RESET%"=="1" (
         echo   [WARN] --reset mode: database akan DROP ^& di-recreate.
-        set /p CONFIRM_RESET=Yakin drop dixgamefarm_db? Ketik 'YES' untuk lanjut:
+        set /p CONFIRM_RESET=Yakin drop !DB_NAME!? Ketik 'YES' untuk lanjut:
         if /i "!CONFIRM_RESET!"=="YES" (
             if defined DB_PASS (
-                "!MYSQL_BIN!" -u root --password=!DB_PASS! -e "DROP DATABASE IF EXISTS dixgamefarm_db" 2>nul
+                "!MYSQL_BIN!" -u root --password=!DB_PASS! -e "DROP DATABASE IF EXISTS !DB_NAME!" 2>nul
             ) else (
-                "!MYSQL_BIN!" -u root -e "DROP DATABASE IF EXISTS dixgamefarm_db" 2>nul
+                "!MYSQL_BIN!" -u root -e "DROP DATABASE IF EXISTS !DB_NAME!" 2>nul
             )
             echo   [OK]   Database lama di-drop.
         ) else (
@@ -228,17 +235,17 @@ if defined MYSQL_BIN (
     )
 
     if defined DB_PASS (
-        "!MYSQL_BIN!" -u root --password=!DB_PASS! -e "CREATE DATABASE IF NOT EXISTS dixgamefarm_db CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci" 2>nul
+        "!MYSQL_BIN!" -u root --password=!DB_PASS! -e "CREATE DATABASE IF NOT EXISTS !DB_NAME! CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci" 2>nul
     ) else (
-        "!MYSQL_BIN!" -u root -e "CREATE DATABASE IF NOT EXISTS dixgamefarm_db CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci" 2>nul
+        "!MYSQL_BIN!" -u root -e "CREATE DATABASE IF NOT EXISTS !DB_NAME! CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci" 2>nul
     )
     if errorlevel 1 (
         echo   [WARN] Gagal koneksi MySQL pakai user 'root'.
         echo          Cek database.default.username/password di .env atau MySQL service.
         echo          Buat database manual via phpMyAdmin kalau perlu:
-        echo            CREATE DATABASE dixgamefarm_db CHARACTER SET utf8mb4;
+        echo            CREATE DATABASE !DB_NAME! CHARACTER SET utf8mb4;
     ) else (
-        echo   [OK]   Database 'dixgamefarm_db' ready.
+        echo   [OK]   Database '!DB_NAME!' ready.
     )
 ) else (
     echo   [SKIP] mysql client tidak ada. Pastikan DB sudah ada via phpMyAdmin.

@@ -19,12 +19,22 @@ class TelegramService
     private array $chatIds = [];
     private string $apiUrl = 'https://api.telegram.org/bot';
     private bool $enabled = false;
-    private int $connectTimeoutMs = 700;
-    private int $requestTimeoutMs = 1500;
+    private int $connectTimeoutMs = 5000;
+    private int $requestTimeoutMs = 5000;
 
     public function __construct()
     {
         $this->botToken = getenv('TELEGRAM_BOT_TOKEN') ?: '';
+
+        $connectTimeoutMs = (int) (getenv('TELEGRAM_CONNECT_TIMEOUT_MS') ?: 0);
+        if ($connectTimeoutMs > 0) {
+            $this->connectTimeoutMs = $connectTimeoutMs;
+        }
+
+        $requestTimeoutMs = (int) (getenv('TELEGRAM_REQUEST_TIMEOUT_MS') ?: 0);
+        if ($requestTimeoutMs > 0) {
+            $this->requestTimeoutMs = $requestTimeoutMs;
+        }
 
         $adminIds = getenv('TELEGRAM_ADMIN_IDS') ?: '';
         if ($adminIds !== '') {

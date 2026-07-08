@@ -70,6 +70,7 @@ class TelegramPollAdmin extends BaseCommand
         $updates = $service->fetchUpdates($offset, $timeout);
 
         if ($updates === []) {
+            sleep(1);
             return 0;
         }
 

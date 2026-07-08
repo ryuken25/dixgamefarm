@@ -83,6 +83,8 @@ class AlignOrderStatusFlowAndCheckoutSchema extends Migration
 
     private function ensureColumnExists(string $table, string $column, array $definition): void
     {
+        $this->db->resetDataCache();
+
         if ($this->db->fieldExists($column, $table)) {
             return;
         }
