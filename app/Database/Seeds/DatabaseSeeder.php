@@ -15,6 +15,11 @@ use CodeIgniter\Database\Seeder;
  *    'MENUNGGU_BAYAR' supaya tidak memicu error ENUM & read-after-write guard.
  *  - diproses_at / dikirim_at di-backfill dari updated_at untuk order yang sudah
  *    DIPROSES / DIKIRIM / SELESAI, supaya fitur SLA & reminder pengiriman akurat.
+ *  - Order #23 (INV-20260707-4521) adalah contoh order yang telat bayar lebih
+ *    dari 3 hari (PesananModel::PAYMENT_WINDOW_HOURS = 72 jam) dan otomatis
+ *    dibatalkan sistem via cron `orders:cleanup-expired`: tanggal_pesanan
+ *    2026-07-07 09:00, expired_at 2026-07-10 09:00 (persis +72 jam, sudah lewat),
+ *    status_pesanan BATAL, dengan notifikasi "Pesanan Dibatalkan Otomatis".
  */
 class DatabaseSeeder extends Seeder
 {
@@ -109,7 +114,8 @@ INSERT INTO `pesanan` (`id`, `user_id`, `nomor_invoice`, `tanggal_pesanan`, `exp
 (19, 33, 'INV-20260608-6807', '2026-06-08 20:56:49', NULL, 5000000.00, 'DIPROSES', NULL, 'DIKIRIM_KURIR', 'BCA', '1234567890', '', '2026-06-08 20:56:49', '2026-06-13 08:51:57', 'putra krisna', 'putrakrisna232@gmail.com', '085792717468', 'Jl. Gadung No 10, Denpasar Timur'),
 (20, 33, 'INV-20260613-5540', '2026-06-13 08:43:09', '2026-06-14 08:43:09', 5000000.00, 'MENUNGGU_BAYAR', NULL, 'DIKIRIM_KURIR', 'BCA', '1234567890', '', '2026-06-13 08:43:09', '2026-06-13 08:43:09', 'putra krisna', 'putrakrisna232@gmail.com', '085792717468', 'Jl. Gadung No 10, Denpasar Timur'),
 (21, 33, 'INV-20260613-4233', '2026-06-13 08:46:39', NULL, 5000000.00, 'MENUNGGU_BAYAR', NULL, 'DIKIRIM_KURIR', 'BCA', '1234567890', '', '2026-06-13 08:46:39', '2026-06-13 08:47:17', 'putra krisna', 'putrakrisna232@gmail.com', '085792717468', 'Jl. Gadung No 10, Denpasar Timur'),
-(22, 2, 'INV-20260708-1968', '2026-07-08 09:00:52', NULL, 4000000.00, 'DIPROSES', NULL, 'DIKIRIM_KURIR', 'GoPay', '08123456789', '', '2026-07-08 09:00:52', '2026-07-08 09:03:34', 'I Ketut Suarjana', 'ketut.suarjana@gmail.com', '081987654321', 'Jl. Hayam Wuruk No. 45, Denpasar Selatan, Bali')
+(22, 2, 'INV-20260708-1968', '2026-07-08 09:00:52', NULL, 4000000.00, 'DIPROSES', NULL, 'DIKIRIM_KURIR', 'GoPay', '08123456789', '', '2026-07-08 09:00:52', '2026-07-08 09:03:34', 'I Ketut Suarjana', 'ketut.suarjana@gmail.com', '081987654321', 'Jl. Hayam Wuruk No. 45, Denpasar Selatan, Bali'),
+(23, 6, 'INV-20260707-4521', '2026-07-07 09:00:00', '2026-07-10 09:00:00', 135000.00, 'BATAL', NULL, 'AMBIL_SENDIRI', NULL, NULL, NULL, '2026-07-07 09:00:00', '2026-07-10 09:05:00', NULL, NULL, NULL, NULL)
 SQL);
 
         // ---- detail_pesanan ----
@@ -138,7 +144,8 @@ INSERT INTO `detail_pesanan` (`id`, `pesanan_id`, `produk_id`, `harga_satuan_sna
 (23, 19, 8, 5000000.00, 1, 5000000.00, 0, '2026-06-08 20:56:49', '2026-06-08 20:56:49'),
 (24, 20, 8, 5000000.00, 1, 5000000.00, 0, '2026-06-13 08:43:09', '2026-06-13 08:43:09'),
 (25, 21, 8, 5000000.00, 1, 5000000.00, 0, '2026-06-13 08:46:39', '2026-06-13 08:46:39'),
-(26, 22, 7, 4000000.00, 1, 4000000.00, 0, '2026-07-08 09:00:52', '2026-07-08 09:00:52')
+(26, 22, 7, 4000000.00, 1, 4000000.00, 0, '2026-07-08 09:00:52', '2026-07-08 09:00:52'),
+(27, 23, 9, 45000.00, 3, 135000.00, 0, '2026-07-07 09:00:00', '2026-07-07 09:00:00')
 SQL);
 
         // ---- pembayaran ----
@@ -209,7 +216,9 @@ INSERT INTO `notifikasi` (`id`, `user_id`, `judul`, `pesan`, `is_read`, `created
 (47, 33, 'Pembayaran Diverifikasi', 'Pembayaran Anda untuk invoice INV-20260608-6807 telah diverifikasi. Pesanan sedang diproses.', 0, '2026-06-13 08:51:57'),
 (48, 2, 'Pesanan Berhasil Dibuat', 'Pesanan Anda dengan nomor invoice INV-20260708-1968 telah dibuat. Silakan lakukan pembayaran dalam 24 jam.', 0, '2026-07-08 09:00:52'),
 (49, 2, 'Bukti Pembayaran Diterima', 'Bukti pembayaran untuk invoice INV-20260708-1968 telah diterima dan menunggu verifikasi admin.', 0, '2026-07-08 09:01:47'),
-(50, 2, 'Pembayaran Diverifikasi', 'Pembayaran Anda untuk invoice INV-20260708-1968 telah diverifikasi. Pesanan sedang diproses.', 0, '2026-07-08 09:03:34')
+(50, 2, 'Pembayaran Diverifikasi', 'Pembayaran Anda untuk invoice INV-20260708-1968 telah diverifikasi. Pesanan sedang diproses.', 0, '2026-07-08 09:03:34'),
+(51, 6, 'Pesanan Berhasil Dibuat', 'Pesanan Anda dengan nomor invoice INV-20260707-4521 telah dibuat. Silakan lakukan pembayaran dalam 3 hari.', 0, '2026-07-07 09:00:00'),
+(52, 6, 'Pesanan Dibatalkan Otomatis', 'Pesanan INV-20260707-4521 telah dibatalkan otomatis karena tidak ada pembayaran dalam 3 hari.', 0, '2026-07-10 09:05:00')
 SQL);
 
         // ---- telegram_action_tokens ----
@@ -264,6 +273,6 @@ SQL);
         echo "============================================\n";
         echo "  Admin    : admin@dixgamefarm.com / admin123\n";
         echo "  Customer : ketut.suarjana@gmail.com / (hash asli dari dump)\n";
-        echo "  8 users, 4 kategori, 9 produk, 20 pesanan, 15 pembayaran, 46 notifikasi\n\n";
+        echo "  8 users, 4 kategori, 9 produk, 21 pesanan, 15 pembayaran, 48 notifikasi\n\n";
     }
 }

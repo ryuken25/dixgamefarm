@@ -305,18 +305,19 @@ class PembayaranModel extends Model
                     'alasan_ditolak' => $alasan,
                 ]);
 
-                // Reset order to MENUNGGU_BAYAR with a fresh 24-hour window so
+                // Reset order to MENUNGGU_BAYAR with a fresh payment window so
                 // the customer can upload corrected proof. Stock reservation is
                 // intentionally kept — do NOT release here. Stock is only freed
                 // when the order is explicitly cancelled or auto-expires via cron.
                 $pesananModel->update($payment['pesanan_id'], [
                     'status_pesanan' => 'MENUNGGU_BAYAR',
-                    'expired_at' => date('Y-m-d H:i:s', strtotime('+24 hours')),
+                    'expired_at' => date('Y-m-d H:i:s', strtotime('+' . PesananModel::PAYMENT_WINDOW_HOURS . ' hours')),
                 ]);
 
+                $paymentWindowDays = (int) (PesananModel::PAYMENT_WINDOW_HOURS / 24);
                 $notifMessage = "Bukti pembayaran untuk invoice {$pesanan['nomor_invoice']} ditolak."
                     . ' Alasan: ' . ($alasan ?? 'Tidak disebutkan')
-                    . '. Silakan login dan upload ulang bukti yang benar dalam 24 jam.';
+                    . ". Silakan login dan upload ulang bukti yang benar dalam {$paymentWindowDays} hari.";
             }
 
             // Notify user

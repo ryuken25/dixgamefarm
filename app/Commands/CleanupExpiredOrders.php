@@ -27,21 +27,25 @@ class CleanupExpiredOrders extends BaseCommand
         CLI::write('Found ' . count($expiredOrders) . ' expired order(s)', 'yellow');
 
         $cancelled = 0;
-        $failed = 0;
+        $skipped = 0;
+        $paymentWindowDays = (int) (PesananModel::PAYMENT_WINDOW_HOURS / 24);
 
         foreach ($expiredOrders as $order) {
             CLI::write("Processing order: {$order['nomor_invoice']}...", 'white');
 
-            if ($pesananModel->cancelOrder($order['id'], 'Expired - payment not completed within 24 hours')) {
+            if ($pesananModel->cancelExpiredOrder((int) $order['id'], "Expired - payment not completed within {$paymentWindowDays} days")) {
                 CLI::write("  -> Order {$order['nomor_invoice']} cancelled successfully", 'green');
                 $cancelled++;
             } else {
-                CLI::write("  -> Failed to cancel order {$order['nomor_invoice']}", 'red');
-                $failed++;
+                // Not necessarily an error: strict re-check inside cancelExpiredOrder()
+                // skips orders that stopped being eligible between the candidate query
+                // and this transaction (e.g. customer just uploaded payment proof).
+                CLI::write("  -> Skipped {$order['nomor_invoice']} (no longer eligible or cancel failed)", 'yellow');
+                $skipped++;
             }
         }
 
         CLI::write('Cleanup completed!', 'yellow');
-        CLI::write("Cancelled: {$cancelled}, Failed: {$failed}", 'white');
+        CLI::write("Cancelled: {$cancelled}, Skipped: {$skipped}", 'white');
     }
 }

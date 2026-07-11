@@ -40,6 +40,14 @@ class PesananModel extends Model
      */
     public const SHIPMENT_SLA_HOURS = 24;
 
+    /**
+     * Batas waktu pembayaran (jam) sebelum order MENUNGGU_BAYAR otomatis
+     * dibatalkan sistem oleh cron `orders:cleanup-expired` (via expired_at).
+     * Satu-satunya sumber kebenaran — dipakai juga oleh PembayaranModel saat
+     * reset window setelah bukti pembayaran ditolak.
+     */
+    public const PAYMENT_WINDOW_HOURS = 72; // 3 hari
+
     // Dates
     protected $useTimestamps = true;
     protected $dateFormat = 'datetime';
@@ -154,7 +162,7 @@ class PesananModel extends Model
             // Create order
             $invoiceNumber = $this->generateInvoiceNumber();
             $tanggalPesanan = date('Y-m-d H:i:s');
-            $expiredAt = date('Y-m-d H:i:s', strtotime('+24 hours')); // 24-hour payment window
+            $expiredAt = date('Y-m-d H:i:s', strtotime('+' . self::PAYMENT_WINDOW_HOURS . ' hours')); // payment window
 
             log_message('debug', 'PesananModel::createOrder creating order record. user_id=' . $userId . ', invoice=' . $invoiceNumber . ', grand_total=' . $grandTotal . ', tipe_pengiriman=' . (string) $tipePengiriman . ', metode_pembayaran=' . (string) $metodePembayaran);
 
@@ -209,10 +217,11 @@ class PesananModel extends Model
 
             // Create notification
             $notifModel = new NotifikasiModel();
+            $paymentWindowDays = (int) (self::PAYMENT_WINDOW_HOURS / 24);
             $notifModel->createNotification(
                 $userId,
                 'Pesanan Berhasil Dibuat',
-                "Pesanan Anda dengan nomor invoice {$invoiceNumber} telah dibuat. Silakan lakukan pembayaran dalam 24 jam."
+                "Pesanan Anda dengan nomor invoice {$invoiceNumber} telah dibuat. Silakan lakukan pembayaran dalam {$paymentWindowDays} hari."
             );
 
             log_message('debug', 'PesananModel::createOrder persisted order. order_id=' . $orderId . ', invoice=' . $invoiceNumber . ', grand_total=' . $grandTotal . ', status=MENUNGGU_BAYAR');
@@ -371,6 +380,83 @@ class PesananModel extends Model
         } catch (\Exception $e) {
             $db->transRollback();
             log_message('error', 'Order cancellation failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Cancel a single expired order for the `orders:cleanup-expired` cron.
+     *
+     * Unlike cancelOrder(), this locks the pesanan row with FOR UPDATE and
+     * strictly re-verifies status_pesanan === MENUNGGU_BAYAR and expired_at
+     * is still in the past *inside* the transaction. This closes a TOCTOU race
+     * where getExpiredOrders() builds its candidate list, then — before this
+     * order's turn comes up in the loop — the customer uploads payment proof
+     * (status -> MENUNGGU_VERIFIKASI, expired_at cleared to null). Without the
+     * re-check, cancelOrder()'s guard would let that order through (it only
+     * blocks PESANAN_SIAP/DIKIRIM/SELESAI/BATAL, not MENUNGGU_VERIFIKASI) and
+     * wrongly cancel an order that's already awaiting verification.
+     */
+    public function cancelExpiredOrder(int $orderId, string $reason = 'Kadaluarsa - pembayaran tidak diselesaikan tepat waktu'): bool
+    {
+        $db = \Config\Database::connect();
+        $db->transBegin();
+
+        try {
+            $order = $db->query(
+                'SELECT id, user_id, nomor_invoice, status_pesanan, expired_at FROM pesanan WHERE id = ? FOR UPDATE',
+                [$orderId]
+            )->getRowArray();
+
+            if (
+                !$order
+                || $order['status_pesanan'] !== 'MENUNGGU_BAYAR'
+                || empty($order['expired_at'])
+                || strtotime($order['expired_at']) >= time()
+            ) {
+                $db->transRollback();
+                return false;
+            }
+
+            $detailModel = new DetailPesananModel();
+            $details = $detailModel->where('pesanan_id', $orderId)->findAll();
+
+            $produkModel = new ProdukModel();
+
+            foreach ($details as $detail) {
+                if (!empty($detail['is_preorder_item'])) {
+                    continue;
+                }
+                if (!$produkModel->releaseStock($detail['produk_id'], $detail['jumlah'])) {
+                    $db->transRollback();
+                    return false;
+                }
+            }
+
+            $this->update($orderId, [
+                'status_pesanan' => 'BATAL'
+            ]);
+
+            $notifModel = new NotifikasiModel();
+            $notifModel->createNotification(
+                $order['user_id'],
+                'Pesanan Dibatalkan Otomatis',
+                "Pesanan {$order['nomor_invoice']} telah dibatalkan otomatis. Alasan: {$reason}"
+            );
+
+            $db->transCommit();
+
+            try {
+                (new \App\Libraries\EmailService())->sendOrderCancelled((int) $orderId, $reason);
+            } catch (\Throwable $e) {
+                log_message('error', 'Order-cancelled email failed: ' . $e->getMessage());
+            }
+
+            return true;
+
+        } catch (\Exception $e) {
+            $db->transRollback();
+            log_message('error', 'Expired order cancellation failed: ' . $e->getMessage());
             return false;
         }
     }

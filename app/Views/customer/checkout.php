@@ -201,7 +201,7 @@
 
                     <div class="alert alert-info small mb-3">
                         <i class="bi bi-info-circle me-1"></i>
-                        Pembayaran dapat dilakukan dalam waktu 24 jam setelah pesanan dibuat.
+                        Pembayaran dapat dilakukan dalam waktu 3 hari setelah pesanan dibuat.
                     </div>
 
                     <div class="d-grid">
